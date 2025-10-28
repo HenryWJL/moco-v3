@@ -15,6 +15,8 @@ import shutil
 import time
 import warnings
 from functools import partial
+from copy import deepcopy
+from google.colab import files
 
 import torch
 import torch.nn as nn
@@ -229,8 +231,9 @@ def main_worker(gpu, ngpus_per_node, args):
         optimizer = torch.optim.AdamW(model.parameters(), args.lr,
                                 weight_decay=args.weight_decay)
         
-    scaler = torch.cuda.amp.GradScaler()
+    scaler = torch.amp.GradScaler('cuda')
     summary_writer = SummaryWriter() if args.rank == 0 else None
+    log_dir = summary_writer.log_dir
 
     # optionally resume from a checkpoint
     if args.resume:
@@ -306,14 +309,15 @@ def main_worker(gpu, ngpus_per_node, args):
         train(train_loader, model, optimizer, scaler, summary_writer, epoch, args)
 
         if not args.multiprocessing_distributed or (args.multiprocessing_distributed
-                and args.rank == 0): # only the first GPU saves checkpoint
-            save_checkpoint({
-                'epoch': epoch + 1,
-                'arch': args.arch,
-                'state_dict': model.state_dict(),
-                'optimizer' : optimizer.state_dict(),
-                'scaler': scaler.state_dict(),
-            }, is_best=False, filename='checkpoint_%04d.pth.tar' % epoch)
+                and args.rank == 0 and (epoch + 1) % 50 == 0): # only the first GPU saves checkpoint
+            vit_model = deepcopy(model.module.momentum_encoder)
+            del vit_model.head
+            save_checkpoint(
+              vit_model.state_dict(),
+              is_best=False,
+              filename=f"{log_dir}/checkpoint_{epoch+1}.pth"
+            )
+            files.download(f"{log_dir}/checkpoint_{epoch+1}.pth")
 
     if args.rank == 0:
         summary_writer.close()
