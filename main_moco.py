@@ -16,7 +16,6 @@ import time
 import warnings
 from functools import partial
 from copy import deepcopy
-from google.colab import files
 
 import torch
 import torch.nn as nn
@@ -309,7 +308,7 @@ def main_worker(gpu, ngpus_per_node, args):
         train(train_loader, model, optimizer, scaler, summary_writer, epoch, args)
 
         if not args.multiprocessing_distributed or (args.multiprocessing_distributed
-                and args.rank == 0 and (epoch + 1) % 50 == 0): # only the first GPU saves checkpoint
+                and args.rank == 0) and (epoch + 1) % 50 == 0: # only the first GPU saves checkpoint
             vit_model = deepcopy(model.module.momentum_encoder)
             del vit_model.head
             save_checkpoint(
@@ -317,7 +316,6 @@ def main_worker(gpu, ngpus_per_node, args):
               is_best=False,
               filename=f"{log_dir}/checkpoint_{epoch+1}.pth"
             )
-            files.download(f"{log_dir}/checkpoint_{epoch+1}.pth")
 
     if args.rank == 0:
         summary_writer.close()
